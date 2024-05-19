@@ -878,46 +878,6 @@ void InitSDK()
 	delete hGameData;
 }
 
-public MRESReturn Client_OnGiveNamedItem(int iClient, Handle hReturn, Handle hParams)
-{
-    // Block if one of the pointers is null
-    if (DHookIsNullParam(hParams, 1) || DHookIsNullParam(hParams, 3))
-    {
-        DHookSetReturn(hReturn, 0);
-        return MRES_Supercede;
-    }    
-    
-    char sClassname[64];
-    Address ClassnameAddress = DHookGetParamAddress(hParams, 1);
-
-    for(int i = 0; i < sizeof(sClassname); ++i)
-        sClassname[i] = view_as<int>(LoadFromAddress(view_as<Address>(ClassnameAddress + i), NumberType_Int8));
-
-    int iIndex = DHookGetParamObjectPtrVar(hParams, 3, 4, ObjectValueType_Int) & 0xFFFF;
-    
-    Action iAction = OnGiveNamedItem(sClassname, iIndex);
-    
-    if (iAction == Plugin_Handled)
-    {
-        DHookSetReturn(hReturn, 0);
-        return MRES_Supercede;
-    }
-    
-    return MRES_Ignored;
-}
-
-public void DHook_OnGiveNamedItemRemoved(int iHookId)
-{
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
-	{
-		if (g_iHookIdGiveNamedItem[iClient] == iHookId)
-		{
-			g_iHookIdGiveNamedItem[iClient] = 0;
-			return;
-		}
-	}
-}
-
 public MRESReturn AirAccelerate(Address pThis, Handle hParams)
 {
 	DHookSetParam(hParams, 3, g_flAirAccel[view_as<CGameMovement>(pThis).player]);
@@ -1166,9 +1126,6 @@ public void OnClientPostAdminCheck(int iClient)
 	
 	SetPlayerAirAccel(iClient, g_cvarAirAcceleration.FloatValue);
 	SetPlayerAccel(iClient, g_cvarAcceleration.FloatValue);
-	
-	if (!IsFakeClient(iClient))
-		g_iHookIdGiveNamedItem[iClient] = DHookEntity(g_hHookGiveNamedItem, true, iClient, DHook_OnGiveNamedItemRemoved, Client_OnGiveNamedItem);
 }
 
 public void OnConfigsExecuted()
@@ -1241,7 +1198,6 @@ public void GiveFists(int iClient)
 public Action OnInventoryPost(Event hEvent, const char[] strName, bool bDontBroadcast)
 {
 	int iClient = GetClientOfUserId(hEvent.GetInt("userid"));
-	
 	CheckClientWeapons(iClient);
 	
 	return Plugin_Continue;
@@ -1389,12 +1345,6 @@ public void OnClientDisconnect(int iClient)
 	CPFViewController.Disconnect(iClient);
 	
 	Weapons_ClientDisconnect(iClient);
-	
-	if (g_iHookIdGiveNamedItem[iClient])
-	{
-		DHookRemoveHookID(g_iHookIdGiveNamedItem[iClient]);
-		g_iHookIdGiveNamedItem[iClient] = 0;
-	}
 		
 	g_bTutorialFetched[iClient] = false;
 }
@@ -2061,7 +2011,7 @@ public void OnPostThink(int iClient)
 public Action OnPlayerRunCmd(int iClient, int &iButtons) 
 { 
 	if (!IsValidClient(iClient))
-		return Plugin_Handled;
+		return Plugin_Continue;
 	
 	if (CPFStateController.Get(iClient) == State_Locked && (iButtons & IN_JUMP))
 	{
